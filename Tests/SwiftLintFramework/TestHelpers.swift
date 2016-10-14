@@ -132,6 +132,7 @@ extension XCTestCase {
             XCTFail("nonTriggeringExample violated: \n\(nonTriggerWithViolations)")
         }
 
+        // Triggering examples violate
         var violationsCount = 0
         var expectedViolationsCount = 0
         for trigger in triggers {
@@ -142,6 +143,9 @@ extension XCTestCase {
             // Triggering examples with violation markers violate at the marker's location
             let (cleanTrigger, markerOffsets) = cleanedContentsAndMarkerOffsets(from: trigger)
             if markerOffsets.isEmpty {
+                if triggerViolations.isEmpty {
+                    XCTFail("triggeringExample did not violate: \n```\n\(trigger)\n```")
+                }
                 expectedViolationsCount += 1
                 continue
             }
@@ -153,7 +157,6 @@ extension XCTestCase {
                 XCTAssertEqual(triggerViolation.location, expectedLocation)
             }
         }
-        // Triggering examples violate
         XCTAssertEqual(violationsCount, expectedViolationsCount)
 
         // Comment doesn't violate
