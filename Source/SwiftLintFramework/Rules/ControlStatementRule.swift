@@ -8,7 +8,7 @@
 
 import SourceKittenFramework
 
-public struct ControlStatementRule: ConfigurationProviderRule {
+public struct ControlStatementRule: CorrectableRule, ConfigurationProviderRule {
 
     public var configuration = SeverityConfiguration(.Warning)
 
@@ -52,6 +52,11 @@ public struct ControlStatementRule: ConfigurationProviderRule {
             "do { ; } ↓while(condition) {\n",
             "do { ; } ↓while (condition) {\n",
             "↓switch (foo) {\n"
+        ],
+        corrections: [
+            "if (condition) {}\n": "if condition {}\n",
+            "if ((a || b) && (c || d)) {}\n": "if (a || b) && (c || d) {}\n",
+            "if ((min...max).contains(value)) {\n": "if (min...max).contains(value) {\n"
         ]
     )
 
@@ -72,6 +77,39 @@ public struct ControlStatementRule: ConfigurationProviderRule {
             }
         }
 
+    }
+
+    public func correctFile(file: File) -> [Correction] {
+        let pattern = "if\\s*\\(([^,{]*)\\)\\s*\\{"
+        let regularExpression = regex(pattern)
+        let violations = file
+            .matchPattern(pattern)
+            .filter { match, syntaxKinds in
+                let matchString = file.contents.substring(match.location, length:  match.length)
+                return !self.isFalsePositive(matchString, syntaxKind: syntaxKinds.first)
+            }
+            .flatMap { range, _ in
+                return range
+            }
+        if violations.isEmpty {
+            return []
+        }
+
+        let matches = file.ruleEnabledViolatingRanges(violations, forRule: self)
+        if matches.isEmpty {
+            return []
+        }
+
+        var corrections = [Correction]()
+        var contents = file.contents
+        for range in matches.reverse() {
+            let location = Location(file: file, characterOffset: range.location)
+            contents = regularExpression.stringByReplacingMatchesInString(contents, options: [], range: range, withTemplate: "if $1 {")
+            corrections.append(Correction(ruleDescription: self.dynamicType.description, location: location))
+        }
+        file.write(contents)
+
+        return corrections
     }
 
     private func isFalsePositive(content: String, syntaxKind: SyntaxKind?) -> Bool {
